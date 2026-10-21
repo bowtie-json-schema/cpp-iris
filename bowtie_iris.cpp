@@ -204,6 +204,21 @@ void emit_errored_results(std::string &out, std::size_t n,
   out += "]}";
 }
 
+// Emit a results array whose every entry is a skipped test item carrying a
+// message. Used for unsupported run configurations (e.g. annotations output).
+void emit_skipped_results(std::string &out, std::size_t n,
+                          std::string_view msg) {
+  out += "\"results\":[";
+  for (std::size_t i = 0; i < n; ++i) {
+    if (i)
+      out.push_back(',');
+    out += R"({"skipped":true,"message":)";
+    serialize_string(msg, out);
+    out += "}";
+  }
+  out += "]}";
+}
+
 void on_run(const iris::JsonValue &cmd) {
   std::string out = "{";
   if (const auto *seq = cmd.find("seq")) {
@@ -226,6 +241,14 @@ void on_run(const iris::JsonValue &cmd) {
     return;
   }
   const std::size_t n_tests = tests_v->as_array().size();
+
+  if (const auto *output = cmd.find("output");
+      output && output->is_string() && output->as_string() == "annotations") {
+    emit_skipped_results(out, n_tests,
+                         "iris does not support annotation collection");
+    write_line(out);
+    return;
+  }
 
   // Build the validator once for this case (auto fast<->slow routing).
   std::string schema_str;
